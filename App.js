@@ -12,16 +12,15 @@ import { COLORS } from './src/Constants';
 import { Header } from './src/components.js/Header';
 import EmptyState from './src/components.js/EmptyState';
 import { LoadingIndicator } from './src/components.js/LoadingIndicator';
+import { ChatInput } from './src/components.js/ChatInput';
 
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [currentGPTText, setCurrentGPTText] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordingInterval, setRecordingInterval] = useState(null);
-  const { recording, recordingStatus, startRecording, stopRecording } = useAudioRecorder();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedGender, setSelectedGender] = useState('male');
-
+  const { recording, recordingStatus, startRecording, stopRecording } = useAudioRecorder();
   const { 
     playAudio, 
     isPlaying, 
@@ -65,41 +64,78 @@ export default function App() {
     }
   };
 
+  const handleStartRecording = async () => {
+    try {
+      await startRecording();
+    } catch (error) {
+      console.error('Error al iniciar la grabación:', error);
+      Alert.alert(
+        'Error',
+        'No se pudo iniciar la grabación. Por favor, intenta de nuevo.'
+      );
+    }
+  };
+
+  const handleStopRecording = async () => {
+    try {
+      const audioUri = await stopRecording();
+      console.log('Audio URI obtenido:', audioUri); // Debug
+      if (audioUri) {
+        await processUserMessage(audioUri);
+      }
+    } catch (error) {
+      console.error('Error al detener la grabación:', error);
+      Alert.alert(
+        'Error',
+        'Hubo un problema al procesar la grabación. Por favor, intenta de nuevo.'
+      );
+    }
+  };
+
   const processUserMessage = async (audioUri) => {
+    console.log('Procesando mensaje de audio:', audioUri); // Debug
     setIsProcessing(true);
     try {
-      // Agregar mensaje del usuario
+      // Mensaje de audio del usuario
       const userMessage = {
         id: Date.now().toString(),
         audioUri,
         timestamp: new Date().toLocaleString(),
         type: 'user',
+        messageType: 'audio'
       };
       
       const newMessages = [...messages, userMessage];
       setMessages(newMessages);
       await saveMessages(newMessages);
 
-      // Procesar respuesta de GPT
+      // Convertir audio a texto
       const audioFile = {
         uri: audioUri,
         type: 'audio/m4a',
-        name: 'recording.m4a',
+        name: 'recording.m4a'
       };
 
       // Añadir un pequeño delay para mostrar la animación
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      console.log('Convirtiendo audio a texto...'); // Debug
       const text = await api.convertAudioToText(audioFile);
-      const gptResponse = await api.getChatGPTResponse(text);
-      setCurrentGPTText(gptResponse);
+      console.log('Texto convertido:', text); // Debug
 
-      // Agregar mensaje de GPT
+      // Obtener respuesta de GPT
+      console.log('Obteniendo respuesta de GPT...'); // Debug
+      const gptResponse = await api.getChatGPTResponse(text);
+      console.log('Respuesta de GPT:', gptResponse); // Debug
+
+      // Mensaje de GPT
       const gptMessage = {
         id: Date.now().toString(),
+        content: gptResponse,
         audioUri: gptResponse,
         timestamp: new Date().toLocaleString(),
         type: 'gpt',
+        messageType: 'text'
       };
 
       const updatedMessages = [...newMessages, gptMessage];
@@ -107,10 +143,10 @@ export default function App() {
       await saveMessages(updatedMessages);
 
     } catch (error) {
-      console.error('Error procesando mensaje:', error);
+      console.error('Error procesando mensaje de audio:', error);
       Alert.alert(
         'Error',
-        'Hubo un problema procesando tu mensaje. Por favor, intenta de nuevo.'
+        'Hubo un problema al procesar tu mensaje de audio. Por favor, intenta de nuevo.'
       );
     } finally {
       setIsProcessing(false);
@@ -171,6 +207,49 @@ export default function App() {
       await processUserMessage(message.audioUri, true);
     }
   };
+  const handleSendText = async (text) => {
+    setIsProcessing(true);
+    try {
+      // Mensaje del usuario
+      const userMessage = {
+        id: Date.now().toString(),
+        content: text,
+        timestamp: new Date().toLocaleString(),
+        type: 'user',
+        messageType: 'text'
+      };
+      
+      const newMessages = [...messages, userMessage];
+      setMessages(newMessages);
+      await saveMessages(newMessages);
+
+      // Obtener respuesta de GPT
+      const gptResponse = await api.getChatGPTResponse(text);
+      
+      // Mensaje de GPT
+      const gptMessage = {
+        id: Date.now().toString(),
+        content: gptResponse,
+        audioUri: gptResponse,
+        timestamp: new Date().toLocaleString(),
+        type: 'gpt',
+        messageType: 'text'
+      };
+
+      const updatedMessages = [...newMessages, gptMessage];
+      setMessages(updatedMessages);
+      await saveMessages(updatedMessages);
+
+    } catch (error) {
+      console.error('Error procesando mensaje de texto:', error);
+      Alert.alert(
+        'Error',
+        'Hubo un problema al procesar tu mensaje. Por favor, intenta de nuevo.'
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const clearChat = async () => {
     Alert.alert(
@@ -196,38 +275,41 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-    <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-    
-    <Header onClearChat={clearChat} />
-    
-    {messages.length === 0 ? (
-      <EmptyState />
-    ) : (
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <MessageBubble
-            message={item}
-            onPress={playAudio}
-            onLongPress={handleLongPressMessage}
-            isPlaying={currentPlayingId === item.id && (isPlaying || isGPTSpeaking)}
-            isPaused={currentPlayingId === item.id && isPaused}
-          />
-        )}
-        contentContainerStyle={styles.messagesList}
-      />
-    )}
-    {isProcessing && <LoadingIndicator />}
-    
-    <RecordButton
-      isRecording={recordingStatus === 'recording'}
-      onPress={handleRecordPress}
-      recordingTime={recordingTime}
-    />
-  </SafeAreaView>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      
+      <Header onClearChat={clearChat} />
+      
+      {messages.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <MessageBubble
+              message={item}
+              onPress={(message) => playAudio(message)}
+              onLongPress={handleLongPressMessage}
+              isPlaying={currentPlayingId === item.id && (isPlaying || isGPTSpeaking)}
+              isPaused={currentPlayingId === item.id && isPaused}
+            />
+          )}
+          contentContainerStyle={styles.messagesList}
+        />
+      )}
 
+      {isProcessing && <LoadingIndicator />}
+      
+      <ChatInput
+        onSendText={handleSendText}
+        onStartRecording={handleStartRecording}
+        onStopRecording={handleStopRecording}
+        isRecording={recordingStatus === 'recording'}
+        recordingTime={recordingTime}
+      />
+    </SafeAreaView>
   );
+
 }
 
 const styles = StyleSheet.create({

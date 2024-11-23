@@ -3,14 +3,15 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../Constants';
 
-export const MessageBubble = ({ 
-  message, 
-  onPress, 
-  isPlaying, 
+export const MessageBubble = ({
+  message,
+  onPress,
+  isPlaying,
   isPaused,
   onLongPress,
 }) => {
   const isUser = message.type === 'user';
+  const isAudio = message.messageType === 'audio';
   
   const getIcon = () => {
     if (isPlaying) return "pause-circle";
@@ -18,28 +19,6 @@ export const MessageBubble = ({
     return "play-circle";
   };
 
-  const getWaveform = () => {
-    if (isPlaying) {
-      return (
-        <View style={styles.waveform}>
-          {[...Array(5)].map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.waveformBar,
-                {
-                  height: Math.random() * 20 + 10,
-                  backgroundColor: isUser ? COLORS.textPrimary : COLORS.secondary,
-                },
-              ]}
-            />
-          ))}
-        </View>
-      );
-    }
-    return null;
-  };
-  
   return (
     <TouchableOpacity 
       onPress={() => onPress(message)}
@@ -50,28 +29,48 @@ export const MessageBubble = ({
       ]}
     >
       <View style={styles.messageContent}>
-        <View style={styles.iconContainer}>
-          <MaterialCommunityIcons
-            name={getIcon()}
-            size={28}
-            color={isUser ? COLORS.textPrimary : COLORS.secondary}
-          />
-          {getWaveform()}
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.timestamp}>{message.timestamp}</Text>
-          <Text style={styles.messageText}>
-            {isUser ? '🎤 Audio del Usuario' : '💬 Respuesta de GPT'}
-          </Text>
+        {!isAudio ? (
+          <>
+            <Text style={styles.messageText}>
+              {message.content}
+            </Text>
+            {message.type === 'gpt' && (
+              <TouchableOpacity 
+                onPress={() => onPress(message)}
+                style={styles.playButton}
+              >
+                <MaterialCommunityIcons
+                  name={getIcon()}
+                  size={24}
+                  color={COLORS.secondary}
+                />
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <View style={styles.audioContainer}>
+            <MaterialCommunityIcons
+              name={getIcon()}
+              size={28}
+              color={isUser ? COLORS.textPrimary : COLORS.secondary}
+            />
+            <Text style={styles.audioText}>
+              {isUser ? '🎤 Audio del Usuario' : '💬 Respuesta de GPT'}
+            </Text>
+          </View>
+        )}
+        
+        <Text style={styles.timestamp}>{message.timestamp}</Text>
+        {(isPlaying || isPaused) && (
           <Text style={styles.status}>
-            {isPlaying ? 'Reproduciendo...' : 
-             isPaused ? 'En pausa' : ''}
+            {isPlaying ? 'Reproduciendo...' : 'En pausa'}
           </Text>
-        </View>
+        )}
       </View>
     </TouchableOpacity>
   );
 };
+
 
 const styles = StyleSheet.create({
   messageContainer: {
@@ -115,5 +114,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  audioContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+  },
+  audioText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+  },
+  playButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
   },
 });
