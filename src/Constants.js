@@ -1,0 +1,16 @@
+export const COLORS = {
+  primary: '#075E54',
+  secondary: '#128C7E',
+  accent: '#25D366',
+  white: '#FFFFFF',
+  background: '#ECE5DD',
+  userMessage: '#DCF8C6',
+  botMessage: '#FFFFFF',
+  textPrimary: '#075E54',
+  textSecondary: '#4A4A4A',
+  recording: '#FF3B30',
+  error: '#FF3B30',
+  success: '#34C759',
+  divider: '#B2B2B2',
+  overlay: 'rgba(0, 0, 0, 0.5)',
+};
