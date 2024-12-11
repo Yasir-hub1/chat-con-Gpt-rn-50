@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, FlatList, StyleSheet, StatusBar, SafeAreaView, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, FlatList, StyleSheet, StatusBar, SafeAreaView, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import * as Linking from 'expo-linking'
 
 import { MessageBubble } from './src/components.js/MessageBubble';
 import { RecordButton } from './src/components.js/RecordButton';
@@ -13,6 +13,9 @@ import { Header } from './src/components.js/Header';
 import EmptyState from './src/components.js/EmptyState';
 import { LoadingIndicator } from './src/components.js/LoadingIndicator';
 import { ChatInput } from './src/components.js/ChatInput';
+import {  useShakeDetector } from './src/hooks/useShakeDetection ';
+import { Vibration } from 'react-native';
+import { registerBackgroundTask, unregisterBackgroundTask } from './src/services/ForegroundService';
 
 export default function App() {
   const [messages, setMessages] = useState([]);
@@ -21,6 +24,8 @@ export default function App() {
   const [recordingInterval, setRecordingInterval] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const { recording, recordingStatus, startRecording, stopRecording } = useAudioRecorder();
+  const shakeTimerRef = useRef(null);
+
   const { 
     playAudio, 
     isPlaying, 
@@ -33,6 +38,53 @@ export default function App() {
   useEffect(() => {
     loadMessages();
   }, []);
+
+  
+  // Limpiar el temporizador cuando el componente se desmonte
+  useEffect(() => {
+    return () => {
+      if (shakeTimerRef.current) {
+        clearTimeout(shakeTimerRef.current);
+      }
+    };
+  }, []);
+
+
+
+  useEffect(() => {
+    const setupBackground = async () => {
+      try {
+        await registerBackgroundTask();
+      } catch (error) {
+        console.error('Error configurando background task:', error);
+      }
+    };
+
+    setupBackground();
+
+    return () => {
+      const cleanup = async () => {
+        try {
+          await unregisterBackgroundTask();
+        } catch (error) {
+          console.error('Error limpiando background task:', error);
+        }
+      };
+      cleanup();
+    };
+  }, []);
+
+  // Función para detener la grabación y limpiar el temporizador
+  const stopShakeRecording = async () => {
+    if (shakeTimerRef.current) {
+      clearTimeout(shakeTimerRef.current);
+      shakeTimerRef.current = null;
+    }
+    if (recordingStatus === 'recording') {
+      await handleStopRecording();
+    }
+  };
+
 
   const loadMessages = async () => {
     try {
@@ -52,15 +104,94 @@ export default function App() {
       console.error('Error guardando mensajes:', error);
     }
   };
-
-  const handleRecordPress = async () => {
-    if (recording) {
-      const audioUri = await stopRecording();
-      if (audioUri) {
-        await processUserMessage(audioUri);
+  const handleEmergencyCall = async () => {
+    try {
+      const phoneNumber = Platform.select({
+        ios: 'telprompt:911',
+        android: 'tel:911'
+      });
+      
+      const canOpen = await Linking.canOpenURL(phoneNumber);
+      if (canOpen) {
+        await Linking.openURL(phoneNumber);
+      } else {
+        Alert.alert(
+          'Error',
+          'No se puede abrir la aplicación de llamadas'
+        );
       }
-    } else {
-      await startRecording();
+    } catch (error) {
+      console.error('Error abriendo la app de llamadas:', error);
+      Alert.alert(
+        'Error',
+        'Hubo un problema al intentar realizar la llamada'
+      );
+    }
+  };
+
+  const checkForHelp = (text) => {
+    const normalizedText = text.toLowerCase().trim();
+    if (normalizedText.includes('ayuda')) {
+      handleEmergencyCall();
+    }
+  };
+
+  const handleOpenMaps = async (address) => {
+    try {
+      const encodedAddress = encodeURIComponent(address);
+      
+      // URLs para diferentes plataformas
+      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+      const appleMapsUrl = `maps://maps.apple.com/?q=${encodedAddress}`;
+
+      if (Platform.OS === 'android') {
+        const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
+        if (canOpenGoogleMaps) {
+          await Linking.openURL(googleMapsUrl);
+        } else {
+          Alert.alert(
+            'Error',
+            'No se puede abrir Google Maps. Por favor, instala la aplicación.'
+          );
+        }
+      } else {
+        // iOS intentará primero Apple Maps, si no está disponible usará Google Maps
+        try {
+          await Linking.openURL(appleMapsUrl);
+        } catch {
+          await Linking.openURL(googleMapsUrl);
+        }
+      }
+    } catch (error) {
+      console.error('Error abriendo mapas:', error);
+      Alert.alert(
+        'Error',
+        'No se pudo abrir la aplicación de mapas'
+      );
+    }
+  };
+
+  const checkForLocation = (text) => {
+    console.log('Verificando ubicación en:', text);
+    const normalizedText = text.toLowerCase().trim();
+    
+    // Patrones para detectar solicitudes de ubicación
+    const locationPatterns = [
+      /ubicación\s+(.+)/i,    // "ubicación DIRECCIÓN"
+      /dirección\s+(.+)/i,    // "dirección DIRECCIÓN"
+      /ir\s+a\s+(.+)/i,       // "ir a DIRECCIÓN"
+      /llegar\s+a\s+(.+)/i,   // "llegar a DIRECCIÓN"
+      /como\s+llego\s+a\s+(.+)/i  // "como llego a DIRECCIÓN"
+    ];
+
+    for (const pattern of locationPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const address = match[1].trim();
+        console.log('Dirección encontrada:', address);
+        handleOpenMaps(address);
+        return;
+      }
     }
   };
 
@@ -76,21 +207,21 @@ export default function App() {
     }
   };
 
-  const handleStopRecording = async () => {
-    try {
-      const audioUri = await stopRecording();
-      console.log('Audio URI obtenido:', audioUri); // Debug
-      if (audioUri) {
-        await processUserMessage(audioUri);
-      }
-    } catch (error) {
-      console.error('Error al detener la grabación:', error);
-      Alert.alert(
-        'Error',
-        'Hubo un problema al procesar la grabación. Por favor, intenta de nuevo.'
-      );
-    }
-  };
+  // const handleStopRecording = async () => {
+  //   try {
+  //     const audioUri = await stopRecording();
+  //     console.log('Audio URI obtenido:', audioUri); // Debug
+  //     if (audioUri) {
+  //       await processUserMessage(audioUri);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error al detener la grabación:', error);
+  //     Alert.alert(
+  //       'Error',
+  //       'Hubo un problema al procesar la grabación. Por favor, intenta de nuevo.'
+  //     );
+  //   }
+  // };
 
   const processUserMessage = async (audioUri) => {
     console.log('Procesando mensaje de audio:', audioUri); // Debug
@@ -122,7 +253,10 @@ export default function App() {
       console.log('Convirtiendo audio a texto...'); // Debug
       const text = await api.convertAudioToText(audioFile);
       console.log('Texto convertido:', text); // Debug
-
+      
+         // Verificar si el audio contiene "ayuda"
+         checkForHelp(text);
+         checkForLocation(text); // Añadir verificación de ubicación
       // Obtener respuesta de GPT
       console.log('Obteniendo respuesta de GPT...'); // Debug
       const gptResponse = await api.getChatGPTResponse(text);
@@ -210,6 +344,8 @@ export default function App() {
   const handleSendText = async (text) => {
     setIsProcessing(true);
     try {
+      checkForHelp(text);
+      checkForLocation(text); // Añadir verificación de ubicación
       // Mensaje del usuario
       const userMessage = {
         id: Date.now().toString(),
@@ -272,6 +408,62 @@ export default function App() {
       ]
     );
   };
+
+  const handleShake = async () => {
+    if (recordingStatus !== 'recording' && !isProcessing) {
+      try {
+        // Feedback táctil según la plataforma
+        if (Platform.OS === 'ios') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          Vibration.vibrate(200);
+        }
+        
+        console.log('Iniciando grabación por agitación...');
+        await handleStartRecording();
+        
+        // Limpiar cualquier temporizador existente
+        if (shakeTimerRef.current) {
+          clearTimeout(shakeTimerRef.current);
+        }
+        
+        // Configurar nuevo temporizador para detener la grabación
+        shakeTimerRef.current = setTimeout(async () => {
+          console.log('Deteniendo grabación por temporizador...');
+          await stopShakeRecording();
+        }, 5000);
+
+      } catch (error) {
+        console.error('Error en grabación por agitación:', error);
+        Alert.alert(
+          'Error',
+          'No se pudo iniciar la grabación. Por favor, intenta de nuevo.'
+        );
+      }
+    }
+  };
+
+  // También deberíamos limpiar el temporizador si el usuario detiene manualmente la grabación
+  const handleStopRecording = async () => {
+    if (shakeTimerRef.current) {
+      clearTimeout(shakeTimerRef.current);
+      shakeTimerRef.current = null;
+    }
+    // Tu lógica existente de handleStopRecording
+    try {
+      const audioUri = await stopRecording();
+      if (audioUri) {
+        await processUserMessage(audioUri);
+      }
+    } catch (error) {
+      console.error('Error al detener la grabación:', error);
+      Alert.alert(
+        'Error',
+        'Hubo un problema al procesar la grabación. Por favor, intenta de nuevo.'
+      );
+    }
+  };
+  useShakeDetector(handleShake);
 
   return (
     <SafeAreaView style={styles.container}>
