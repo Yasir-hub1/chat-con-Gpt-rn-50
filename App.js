@@ -16,6 +16,7 @@ import { ChatInput } from './src/components.js/ChatInput';
 import {  useShakeDetector } from './src/hooks/useShakeDetection ';
 import { Vibration } from 'react-native';
 import { registerBackgroundTask, unregisterBackgroundTask } from './src/services/ForegroundService';
+import * as IntentLauncher from 'expo-intent-launcher';
 
 export default function App() {
   const [messages, setMessages] = useState([]);
@@ -136,40 +137,93 @@ export default function App() {
     }
   };
 
+  // const handleOpenMaps = async (address) => {
+  //   try {
+  //     const encodedAddress = encodeURIComponent(address);
+      
+  //     // URLs para diferentes plataformas
+  //     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+  //     const appleMapsUrl = `maps://maps.apple.com/?q=${encodedAddress}`;
+
+  //     if (Platform.OS === 'android') {
+  //       const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
+  //       if (canOpenGoogleMaps) {
+  //         await Linking.openURL(googleMapsUrl);
+  //       } else {
+  //         Alert.alert(
+  //           'Error',
+  //           'No se puede abrir Google Maps. Por favor, instala la aplicación.'
+  //         );
+  //       }
+  //     } else {
+  //       // iOS intentará primero Apple Maps, si no está disponible usará Google Maps
+  //       try {
+  //         await Linking.openURL(appleMapsUrl);
+  //       } catch {
+  //         await Linking.openURL(googleMapsUrl);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error('Error abriendo mapas:', error);
+  //     Alert.alert(
+  //       'Error',
+  //       'No se pudo abrir la aplicación de mapas'
+  //     );
+  //   }
+  // };
+
+
   const handleOpenMaps = async (address) => {
     try {
       const encodedAddress = encodeURIComponent(address);
       
-      // URLs para diferentes plataformas
-      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-      const appleMapsUrl = `maps://maps.apple.com/?q=${encodedAddress}`;
-
       if (Platform.OS === 'android') {
-        const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
-        if (canOpenGoogleMaps) {
-          await Linking.openURL(googleMapsUrl);
-        } else {
-          Alert.alert(
-            'Error',
-            'No se puede abrir Google Maps. Por favor, instala la aplicación.'
-          );
-        }
-      } else {
-        // iOS intentará primero Apple Maps, si no está disponible usará Google Maps
+        // Primera opción: Usar geo URI (abre directamente Google Maps si está instalado)
         try {
-          await Linking.openURL(appleMapsUrl);
+          const geoUrl = `geo:0,0?q=${encodedAddress}`;
+          const canOpenGeo = await Linking.canOpenURL(geoUrl);
+          if (canOpenGeo) {
+            await Linking.openURL(geoUrl);
+            return;
+          }
+        } catch (geoError) {
+          console.log('Error con geo URI:', geoError);
+        }
+  
+        // Segunda opción: Abrir en el navegador
+        const webUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+        await Linking.openURL(webUrl);
+      } else {
+        // iOS - mantiene la lógica actual
+        const appleMapsUrl = `maps://maps.apple.com/?q=${encodedAddress}`;
+        const googleMapsWebUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+        
+        try {
+          const canOpenAppleMaps = await Linking.canOpenURL(appleMapsUrl);
+          if (canOpenAppleMaps) {
+            await Linking.openURL(appleMapsUrl);
+          } else {
+            await Linking.openURL(googleMapsWebUrl);
+          }
         } catch {
-          await Linking.openURL(googleMapsUrl);
+          await Linking.openURL(googleMapsWebUrl);
         }
       }
     } catch (error) {
       console.error('Error abriendo mapas:', error);
-      Alert.alert(
-        'Error',
-        'No se pudo abrir la aplicación de mapas'
-      );
+      // Intento final: abrir en el navegador si todo lo demás falla
+      try {
+        const webUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+        await Linking.openURL(webUrl);
+      } catch (finalError) {
+        Alert.alert(
+          'Error',
+          'No se pudo abrir el mapa. Por favor, inténtalo de nuevo.'
+        );
+      }
     }
   };
+
 
   const checkForLocation = (text) => {
     console.log('Verificando ubicación en:', text);

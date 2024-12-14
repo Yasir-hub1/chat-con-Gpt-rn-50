@@ -15,6 +15,11 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "queries": {
+      "package": [
+        "com.google.android.apps.maps"
+      ]
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -23,7 +28,6 @@
           "processing"
         ]
       }
-    
     },
     "plugins": [
       [
@@ -37,7 +41,8 @@
         {
           "motionPermission": "Allow $(PRODUCT_NAME) to access your device motion"
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "android": {
       "adaptiveIcon": {
@@ -47,10 +52,17 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "autoVerify": true,
           "data": [
             {
-              "scheme": "dixi"
+              "scheme": "geo"
+            },
+            {
+              "scheme": "google.navigation"
+            },
+            {
+              "scheme": "https",
+              "host": "*.google.com",
+              "pathPrefix": "/maps"
             }
           ],
           "category": [
@@ -59,8 +71,20 @@
           ]
         }
       ],
+      "plugins": [
+        [
+          "expo-build-properties",
+          {
+            "android": {
+              "compileSdkVersion": 34,
+              "targetSdkVersion": 34,
+              "buildToolsVersion": "34.0.0"
+            }
+          }
+        ]
+      ],
       "permissions": [
-      "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.WAKE_LOCK",
         "android.permission.FOREGROUND_SERVICE",
@@ -69,8 +93,8 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE",
-        "android.permission.CALL_PHONE"
-        
+        "android.permission.CALL_PHONE",
+        "android.permission.INTERNET"
       ],
       "package": "com.rister.chatGpt"
     },
