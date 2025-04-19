@@ -116,7 +116,7 @@ export const unregisterBackgroundTask = async () => {
     }
     
     if (Platform.OS === 'android') {
-      await KeepAwake.deactivateKeepAwakeAsync();
+      await KeepAwake.deactivateKeepAwake();
     }
     
     const isTaskRegistered = await TaskManager.isTaskRegisteredAsync(SHAKE_DETECTION_TASK);

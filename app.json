@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Dixi Tu Asistente",
-    "scheme": "dixi",
-    "slug": "chatGpt",
-    "version": "1.0.7",
+    "name": "TraduApp",
+    "scheme": "traduapp",
+    "slug": "traduappchatGpt",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,9 +21,9 @@
         "UIBackgroundModes": [
           "fetch",
           "processing"
-        ]
+        ],
+        "NSMotionUsageDescription": "Allow $(PRODUCT_NAME) to access your device motion"
       }
-    
     },
     "plugins": [
       [
@@ -50,7 +50,7 @@
           "autoVerify": true,
           "data": [
             {
-              "scheme": "dixi"
+              "scheme": "traduapp"
             }
           ],
           "category": [
@@ -60,7 +60,7 @@
         }
       ],
       "permissions": [
-      "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.WAKE_LOCK",
         "android.permission.FOREGROUND_SERVICE",
@@ -70,17 +70,17 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE",
         "android.permission.CALL_PHONE"
-        
       ],
-      "package": "com.rister.chatGpt"
+      "package": "com.rister.traduappgpt"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
-        "projectId": "e672f56c-98d3-47f5-a395-a9435b95c827"
+        "projectId": "499a561f-a4cc-4597-9817-637f4ba4f0de"
       }
-    }
+    },
+    "owner": "rister"
   }
 }
