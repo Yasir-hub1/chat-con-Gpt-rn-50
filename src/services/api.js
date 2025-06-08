@@ -19,6 +19,7 @@ export const api = {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${API_KEY}`,
           },
+          
         }
       );
       return response.data.text;
