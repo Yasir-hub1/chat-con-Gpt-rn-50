@@ -70,7 +70,8 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE",
-        "android.permission.CALL_PHONE"
+        "android.permission.CALL_PHONE",
+        "AUDIO_RECORDING", "MEDIA_LIBRARY"
       ],
       "package": "com.rister.traduappgpt"
     },

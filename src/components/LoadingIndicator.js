@@ -5,7 +5,7 @@ import { COLORS } from '../Constants';
 
 const { width } = Dimensions.get('window');
 
-export const LoadingIndicator = () => {
+export const LoadingIndicator = ({ loadingText = 'Consultando ventas' }) => {
   // Animaciones para los puntos
   const dots = useRef([
     new Animated.Value(0),
@@ -126,7 +126,7 @@ export const LoadingIndicator = () => {
         }}>
           <View style={styles.iconContainer}>
             <MaterialCommunityIcons 
-              name="robot-outline" 
+              name="chart-line" 
               size={22} 
               color="#00FFEF" 
             />
@@ -135,7 +135,7 @@ export const LoadingIndicator = () => {
         
         {/* Texto de carga */}
         <View style={styles.textContainer}>
-          <Text style={styles.text}>Traduciendo</Text>
+          <Text style={styles.text}>{loadingText}</Text>
           <View style={styles.dotsContainer}>
             {dots.map((dot, index) => (
               <Animated.View
@@ -170,8 +170,8 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     bottom: 80,
-    left: width / 2 - 100,
-    width: 200,
+    left: width / 2 - 110,
+    width: 220,
     alignItems: 'center',
     zIndex: 1000,
   },

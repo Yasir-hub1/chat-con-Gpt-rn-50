@@ -21,8 +21,6 @@ export const useAudioPlayer = () => {
     };
   }, [sound]);
 
-  
-
   const stopCurrentAudio = async () => {
     try {
       if (sound) {
@@ -86,9 +84,9 @@ export const useAudioPlayer = () => {
     }
   };
 
-  const playGPTResponse = async (text, messageId) => {
+  const playAssistantResponse = async (text, messageId) => {
     try {
-      // Si es el mismo mensaje GPT, maneja la pausa
+      // Si es el mismo mensaje del asistente, maneja la pausa
       if (currentPlayingId === messageId) {
         if (isGPTSpeaking) {
           await Speech.stop();
@@ -133,7 +131,7 @@ export const useAudioPlayer = () => {
         },
       });
     } catch (error) {
-      console.error('Error playing GPT response:', error);
+      console.error('Error playing assistant response:', error);
       await stopCurrentAudio();
     }
   };
@@ -142,7 +140,7 @@ export const useAudioPlayer = () => {
     if (message.type === 'user') {
       await playUserAudio(message.audioUri, message.id);
     } else {
-      await playGPTResponse(message.audioUri, message.id);
+      await playAssistantResponse(message.audioUri || message.content, message.id);
     }
   };
 

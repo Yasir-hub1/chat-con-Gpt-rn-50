@@ -1,7 +1,9 @@
+
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../Constants';
+import { api } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -14,7 +16,7 @@ export const MessageBubble = ({
 }) => {
   const isUser = message.type === 'user';
   const isAudio = message.messageType === 'audio';
-  const isTranslation = message.messageType === 'translation';
+  const hasData = message.data && (Array.isArray(message.data) ? message.data.length > 0 : Object.keys(message.data).length > 0);
   
   const getIcon = () => {
     if (isPlaying) return "pause-circle-outline";
@@ -28,14 +30,21 @@ export const MessageBubble = ({
     return timestamp;
   };
 
-  // Función para mostrar la etiqueta de traducción
-  const getTranslationLabel = () => {
-    if (!isTranslation || !message.sourceLang || !message.targetLang) return null;
-    
-    const sourceLabel = message.sourceLang === 'es' ? 'ES' : 'PT';
-    const targetLabel = message.targetLang === 'es' ? 'ES' : 'PT';
-    
-    return `${sourceLabel} → ${targetLabel}`;
+  // Función para exportar datos
+  const handleExport = async (format) => {
+    try {
+      if (!message.data) return;
+      
+      const result = {
+        response: message.content,
+        data: message.data,
+        type: message.queryType || 'general'
+      };
+
+      await api.generateReport(result, format);
+    } catch (error) {
+      console.error('Error exportando datos:', error);
+    }
   };
 
   return (
@@ -67,23 +76,15 @@ export const MessageBubble = ({
         {!isUser && <View style={styles.botMessageAccent} />}
         
         <View style={styles.messageContentWrapper}>
-          {/* Etiqueta de traducción */}
-          {isTranslation && (
-            <View style={styles.translationLabelContainer}>
-              <Text style={styles.translationLabel}>
-                {getTranslationLabel()}
+          {/* Etiqueta de tipo de consulta */}
+          {!isUser && message.queryType && (
+            <View style={styles.queryTypeContainer}>
+              <Text style={styles.queryTypeLabel}>
+                {getQueryTypeLabel(message.queryType)}
               </Text>
             </View>
           )}
 
-          {/* Texto original (para traducciones) */}
-          {isTranslation && message.originalText && (
-            <View style={styles.originalTextContainer}>
-              <Text style={styles.originalTextLabel}>Original:</Text>
-              <Text style={styles.originalText}>{message.originalText}</Text>
-            </View>
-          )}
-          
           {!isAudio ? (
             // Mensaje de texto
             <View style={styles.textMessageContent}>
@@ -94,17 +95,47 @@ export const MessageBubble = ({
                 {message.content}
               </Text>
               
-              {(message.type === 'gpt' || isTranslation) && (
-                <TouchableOpacity 
-                  onPress={() => onPress(message)}
-                  style={styles.playButton}
-                >
-                  <MaterialCommunityIcons
-                    name={getIcon()}
-                    size={22}
-                    color="#00FFEF"
-                  />
-                </TouchableOpacity>
+              {/* Botones de acción para mensajes del asistente */}
+              {!isUser && (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity 
+                    onPress={() => onPress(message)}
+                    style={styles.playButton}
+                  >
+                    <MaterialCommunityIcons
+                      name={getIcon()}
+                      size={22}
+                      color="#00FFEF"
+                    />
+                  </TouchableOpacity>
+                  
+                  {/* Botones de exportación si hay datos */}
+                  {hasData && (
+                    <View style={styles.exportButtons}>
+                      <TouchableOpacity 
+                        onPress={() => handleExport('excel')}
+                        style={styles.exportButton}
+                      >
+                        <MaterialCommunityIcons
+                          name="microsoft-excel"
+                          size={20}
+                          color="#1D6F42"
+                        />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        onPress={() => handleExport('pdf')}
+                        style={styles.exportButton}
+                      >
+                        <MaterialCommunityIcons
+                          name="file-pdf-box"
+                          size={20}
+                          color="#DC382D"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               )}
             </View>
           ) : (
@@ -128,6 +159,13 @@ export const MessageBubble = ({
                 ]}>
                   {isUser ? 'Mensaje de voz' : 'Respuesta de voz'}
                 </Text>
+                
+                {/* Texto transcrito para mensajes de usuario */}
+                {isUser && message.transcription && (
+                  <Text style={styles.transcriptionText}>
+                    "{message.transcription}"
+                  </Text>
+                )}
                 
                 {/* Visualizador de audio (solo decorativo) */}
                 <View style={styles.audioVisualizer}>
@@ -184,7 +222,7 @@ export const MessageBubble = ({
         )}
       </TouchableOpacity>
       
-      {/* Avatar para mensajes del usuario (opcional) */}
+      {/* Avatar para mensajes del usuario */}
       {isUser && (
         <View style={styles.userAvatarContainer}>
           <View style={styles.userAvatar}>
@@ -200,6 +238,20 @@ export const MessageBubble = ({
   );
 };
 
+// Función auxiliar para obtener etiquetas de tipo de consulta
+const getQueryTypeLabel = (type) => {
+  const labels = {
+    'best_sales': '📊 Mejores Ventas',
+    'top_seller': '👤 Mejor Vendedor',
+    'top_products': '📦 Productos Top',
+    'sales_by_branch': '🏪 Ventas por Sucursal',
+    'summary': '📈 Resumen',
+    'trend': '📉 Tendencia',
+    'comparison': '🔄 Comparación',
+    'help': 'ℹ️ Ayuda'
+  };
+  return labels[type] || '💬 Consulta';
+};
 const styles = StyleSheet.create({
   bubbleWrapper: {
     flexDirection: 'row',

@@ -1,606 +1,326 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  StyleSheet,
   View,
-  FlatList,
-  Alert,
-  Platform,
-  Vibration,
-  Linking,
-  StatusBar,
+  StyleSheet,
+  ScrollView,
+  Text,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
-
-// Importa tus componentes existentes
-import Header from './src/components/Header';
-import EmptyState from './src/components/EmptyState';
-import MessageBubble from './src/components/MessageBubble';
-
-// Importa tus hooks personalizados
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAudioRecorder } from './src/hooks/useAudioRecorder';
 import { useAudioPlayer } from './src/hooks/useAudioPlayer';
-
-// Importa la API actualizada de traducción
-
-// Importa constantes
-
-// Funciones para el registro de tareas en segundo plano
-import LanguageSelector from './src/components/LanguageSelector ';
-import { useShakeDetector } from './src/hooks/useShakeDetection ';
 import { api } from './src/services/api';
-import { COLORS } from './src/Constants';
-import { registerBackgroundTask, unregisterBackgroundTask } from './src/services/BackgroundTasks';
-import { LoadingIndicator } from './src/components/LoadingIndicator';
+import MessageBubble from './src/components/MessageBubble';
 import ChatInput from './src/components/ChatInput';
+import LoadingIndicator from './src/components/LoadingIndicator';
 
-export default function App() {
-  // Estados existentes
+
+const App = () => {
   const [messages, setMessages] = useState([]);
-  const [currentGPTText, setCurrentGPTText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [recordingInterval, setRecordingInterval] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const scrollViewRef = useRef();
   
-  // Nuevo estado para el idioma
-  const [sourceLanguage, setSourceLanguage] = useState('es'); // 'es' para español, 'pt' para portugués
-  
-  // Referencias y hooks existentes
   const { recording, recordingStatus, startRecording, stopRecording } = useAudioRecorder();
-  const { 
-    playAudio, 
-    isPlaying, 
-    isGPTSpeaking, 
-    currentPlayingId, 
-    stopCurrentAudio,
-    isPaused 
-  } = useAudioPlayer();
-  const shakeTimerRef = useRef(null);
+  const { playAudio, isPlaying, isGPTSpeaking, currentPlayingId, stopCurrentAudio, isPaused } = useAudioPlayer();
+  
+  const recordingTimerRef = useRef(null);
 
-
-  // Procesar mensaje de audio - Adaptado para traducción
-  const processUserMessage = async (audioUri) => {
-    console.log('Procesando mensaje de audio:', audioUri);
-    setIsProcessing(true);
-    try {
-      // Mensaje de audio del usuario
-      const userMessage = {
-        id: Date.now().toString(),
-        audioUri,
-        timestamp: new Date().toLocaleString(),
-        type: 'user',
-        messageType: 'audio'
-      };
-      
-      const newMessages = [...messages, userMessage];
-      setMessages(newMessages);
-      await saveMessages(newMessages);
-
-      // Preparar el archivo de audio
-      const audioFile = {
-        uri: audioUri,
-        type: 'audio/m4a',
-        name: 'recording.m4a'
-      };
-
-      // Añadir un pequeño delay para mostrar la animación
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Definir el idioma destino basado en el idioma fuente
-      const targetLang = sourceLanguage === 'es' ? 'pt' : 'es';
-      
-      console.log('Transcribiendo y traduciendo audio...');
-      
-      try {
-        // Usamos la función para transcribir y traducir en un solo paso
-        const result = await api.transcribeAndTranslate(audioFile, sourceLanguage, targetLang);
-        
-        console.log('Texto original:', result.originalText);
-        console.log('Texto traducido:', result.translatedText);
-
-        // Verificar palabras clave (si quieres mantener esta funcionalidad)
-        checkForHelp(result.originalText);
-        checkForLocation(result.originalText);
-
-        // Mensaje de traducción
-        const translationMessage = {
-          id: Date.now().toString(),
-          content: result.translatedText,
-          originalText: result.originalText,
-          audioUri: result.translatedText, // Para posible reproducción de audio
-          timestamp: new Date().toLocaleString(),
-          type: 'gpt',
-          messageType: 'translation',
-          sourceLang: sourceLanguage,
-          targetLang
-        };
-
-        const updatedMessages = [...newMessages, translationMessage];
-        setMessages(updatedMessages);
-        await saveMessages(updatedMessages);
-      } catch (error) {
-        console.error('Error en traducción:', error);
-        throw error;
-      }
-
-    } catch (error) {
-      console.error('Error procesando mensaje de audio:', error);
-      Alert.alert(
-        'Error',
-        'Hubo un problema al procesar tu mensaje de audio. Por favor, intenta de nuevo.'
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Manejar envío de texto - Adaptado para traducción
-  const handleSendText = async (text) => {
-    if (!text.trim()) return;
-    
-    setIsProcessing(true);
-    try {
-      // Verificar palabras clave (si quieres mantener esta funcionalidad)
-      checkForHelp(text);
-      checkForLocation(text);
-
-      // Mensaje del usuario
-      const userMessage = {
-        id: Date.now().toString(),
-        content: text,
-        timestamp: new Date().toLocaleString(),
-        type: 'user',
-        messageType: 'text'
-      };
-      
-      const newMessages = [...messages, userMessage];
-      setMessages(newMessages);
-      await saveMessages(newMessages);
-
-      // Traducir texto
-      console.log('Traduciendo texto...');
-      const targetLang = sourceLanguage === 'es' ? 'pt' : 'es';
-      const translation = await api.translateText(text, sourceLanguage, targetLang);
-      console.log('Texto traducido:', translation);
-      
-      // Mensaje de traducción
-      const translationMessage = {
-        id: Date.now().toString(),
-        content: translation,
-        originalText: text,
-        audioUri: translation, // Para posible reproducción de audio
-        timestamp: new Date().toLocaleString(),
-        type: 'gpt',
-        messageType: 'translation',
-        sourceLang: sourceLanguage,
-        targetLang
-      };
-
-      const updatedMessages = [...newMessages, translationMessage];
-      setMessages(updatedMessages);
-      await saveMessages(updatedMessages);
-
-    } catch (error) {
-      console.error('Error procesando mensaje de texto:', error);
-      Alert.alert(
-        'Error',
-        'Hubo un problema al procesar tu mensaje. Por favor, intenta de nuevo.'
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Función para detener la grabación
-  const handleStopRecording = async () => {
-    if (shakeTimerRef.current) {
-      clearTimeout(shakeTimerRef.current);
-      shakeTimerRef.current = null;
-    }
-    
-    try {
-      const audioUri = await stopRecording();
-      if (audioUri) {
-        await processUserMessage(audioUri);
-      }
-    } catch (error) {
-      console.error('Error al detener la grabación:', error);
-      Alert.alert(
-        'Error',
-        'Hubo un problema al procesar la grabación. Por favor, intenta de nuevo.'
-      );
-    }
-  };
-
-  // Cargar mensajes guardados
-  const loadMessages = async () => {
-    try {
-      const storedMessages = await AsyncStorage.getItem('messages');
-      if (storedMessages) {
-        setMessages(JSON.parse(storedMessages));
-      }
-    } catch (error) {
-      console.error('Error cargando mensajes:', error);
-    }
-  };
-
-  // Guardar mensajes
-  const saveMessages = async (newMessages) => {
-    try {
-      await AsyncStorage.setItem('messages', JSON.stringify(newMessages));
-    } catch (error) {
-      console.error('Error guardando mensajes:', error);
-    }
-  };
-
-  // Llamada de emergencia
-  const handleEmergencyCall = async () => {
-    try {
-      const phoneNumber = Platform.select({
-        ios: 'telprompt:911',
-        android: 'tel:911'
-      });
-      
-      const canOpen = await Linking.canOpenURL(phoneNumber);
-      if (canOpen) {
-        await Linking.openURL(phoneNumber);
-      } else {
-        Alert.alert('Error', 'No se puede abrir la aplicación de llamadas');
-      }
-    } catch (error) {
-      console.error('Error abriendo la app de llamadas:', error);
-      Alert.alert('Error', 'Hubo un problema al intentar realizar la llamada');
-    }
-  };
-
-  // Verificar si el texto contiene "ayuda"
-  const checkForHelp = (text) => {
-    const normalizedText = text.toLowerCase().trim();
-    if (normalizedText.includes('ayuda')) {
-      handleEmergencyCall();
-    }
-  };
-
-  // Abrir mapas
-  const handleOpenMaps = async (address) => {
-    try {
-      const encodedAddress = encodeURIComponent(address);
-      
-      // URLs para diferentes plataformas
-      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-      const appleMapsUrl = `maps://maps.apple.com/?q=${encodedAddress}`;
-
-      if (Platform.OS === 'android') {
-        const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
-        if (canOpenGoogleMaps) {
-          await Linking.openURL(googleMapsUrl);
-        } else {
-          Alert.alert('Error', 'No se puede abrir Google Maps. Por favor, instala la aplicación.');
-        }
-      } else {
-        // iOS intentará primero Apple Maps, si no está disponible usará Google Maps
-        try {
-          await Linking.openURL(appleMapsUrl);
-        } catch {
-          await Linking.openURL(googleMapsUrl);
-        }
-      }
-    } catch (error) {
-      console.error('Error abriendo mapas:', error);
-      Alert.alert('Error', 'No se pudo abrir la aplicación de mapas');
-    }
-  };
-
-  // Verificar si el texto contiene una ubicación
-  const checkForLocation = (text) => {
-    console.log('Verificando ubicación en:', text);
-    const normalizedText = text.toLowerCase().trim();
-    
-    // Patrones para detectar solicitudes de ubicación
-    const locationPatterns = [
-      /ubicación\s+(.+)/i,    // "ubicación DIRECCIÓN"
-      /dirección\s+(.+)/i,    // "dirección DIRECCIÓN"
-      /ir\s+a\s+(.+)/i,       // "ir a DIRECCIÓN"
-      /llegar\s+a\s+(.+)/i,   // "llegar a DIRECCIÓN"
-      /como\s+llego\s+a\s+(.+)/i  // "como llego a DIRECCIÓN"
-    ];
-
-    for (const pattern of locationPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const address = match[1].trim();
-        console.log('Dirección encontrada:', address);
-        handleOpenMaps(address);
-        return;
-      }
-    }
-  };
-
-  // Iniciar grabación
-  const handleStartRecording = async () => {
-    try {
-      await startRecording();
-    } catch (error) {
-      console.error('Error al iniciar la grabación:', error);
-      Alert.alert('Error', 'No se pudo iniciar la grabación. Por favor, intenta de nuevo.');
-    }
-  };
-
-  // Borrar un mensaje
-  const deleteMessage = async (messageId) => {
-    const newMessages = messages.filter(m => m.id !== messageId);
-    setMessages(newMessages);
-    await saveMessages(newMessages);
-  };
-
-  // Reproducir un mensaje
-  const replayMessage = async (message) => {
-    if (message.type === 'user') {
-      await processUserMessage(message.audioUri, true);
-    }
-  };
-
-  // Borrar todo el chat
-  const clearChat = async () => {
-    Alert.alert(
-      'Limpiar Chat',
-      '¿Estás seguro de que deseas eliminar todos los mensajes?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Aceptar',
-          style: 'destructive',
-          onPress: async () => {
-            await stopCurrentAudio();
-            setMessages([]);
-            await AsyncStorage.removeItem('messages');
-          },
-        },
-      ]
-    );
-  };
-
-  // Detener la grabación por agitación
-  const stopShakeRecording = async () => {
-    if (shakeTimerRef.current) {
-      clearTimeout(shakeTimerRef.current);
-      shakeTimerRef.current = null;
-    }
-    if (recordingStatus === 'recording') {
-      await handleStopRecording();
-    }
-  };
-
-  // Manejar la agitación del dispositivo
-  const handleShake = async () => {
-    if (recordingStatus !== 'recording' && !isProcessing) {
-      try {
-        // Feedback táctil según la plataforma
-        if (Platform.OS === 'ios') {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } else {
-          Vibration.vibrate(200);
-        }
-        
-        console.log('Iniciando grabación por agitación...');
-        await handleStartRecording();
-        
-        // Limpiar cualquier temporizador existente
-        if (shakeTimerRef.current) {
-          clearTimeout(shakeTimerRef.current);
-        }
-        
-        // Configurar nuevo temporizador para detener la grabación
-        shakeTimerRef.current = setTimeout(async () => {
-          console.log('Deteniendo grabación por temporizador...');
-          await stopShakeRecording();
-        }, 5000);
-
-      } catch (error) {
-        console.error('Error en grabación por agitación:', error);
-        Alert.alert('Error', 'No se pudo iniciar la grabación. Por favor, intenta de nuevo.');
-      }
-    }
-  };
-
-  // Manejar pulsación larga en un mensaje
-  const handleLongPressMessage = (message) => {
-    Alert.alert(
-      'Opciones',
-      '¿Qué deseas hacer con este mensaje?',
-      [
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => deleteMessage(message.id),
-        },
-        {
-          text: 'Repetir',
-          onPress: () => replayMessage(message),
-        },
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-      ]
-    );
-  };
-
-  // Cargar mensajes al iniciar
+  // Mensaje de bienvenida
   useEffect(() => {
-    loadMessages();
+    const welcomeMessage = {
+      id: Date.now().toString(),
+      type: 'assistant',
+      messageType: 'text',
+      content: '¡Hola! Soy tu asistente de ventas. Puedo ayudarte con información sobre:\n\n• Mejores ventas del día/mes/año\n• Vendedor destacado\n• Productos más vendidos\n• Rendimiento por sucursal\n• Resumen y tendencias de ventas\n• Comparaciones entre períodos\n\n¿En qué puedo ayudarte hoy?',
+      timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      queryType: 'help'
+    };
+    setMessages([welcomeMessage]);
   }, []);
 
-  // Limpiar el temporizador al desmontar
-  useEffect(() => {
-    return () => {
-      if (shakeTimerRef.current) {
-        clearTimeout(shakeTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Configurar tareas en segundo plano
-  useEffect(() => {
-    const setupBackground = async () => {
-      try {
-        await registerBackgroundTask();
-      } catch (error) {
-        console.error('Error configurando background task:', error);
-      }
-    };
-
-    setupBackground();
-
-    return () => {
-      const cleanup = async () => {
-        try {
-          await unregisterBackgroundTask();
-        } catch (error) {
-          console.error('Error limpiando background task:', error);
-        }
-      };
-      cleanup();
-    };
-  }, []);
-
-  // Manejar tiempo de grabación
+  // Timer para el tiempo de grabación
   useEffect(() => {
     if (recordingStatus === 'recording') {
-      const interval = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
-      setRecordingInterval(interval);
-    } else {
-      if (recordingInterval) {
-        clearInterval(recordingInterval);
-        setRecordingInterval(null);
-      }
       setRecordingTime(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
     }
+    
     return () => {
-      if (recordingInterval) {
-        clearInterval(recordingInterval);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
       }
     };
   }, [recordingStatus]);
 
-  // Activar el detector de agitación
-  useShakeDetector(handleShake);
+  // Auto-scroll al último mensaje
+  useEffect(() => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [messages]);
+
+  const handleSendText = async (text) => {
+    try {
+      // Agregar mensaje del usuario
+      const userMessage = {
+        id: Date.now().toString(),
+        type: 'user',
+        messageType: 'text',
+        content: text,
+        timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, userMessage]);
+      
+      // Procesar consulta
+      setIsLoading(true);
+      const response = await api.processAssistantQuery(text, 'text');
+      
+      // Agregar respuesta del asistente
+      const assistantMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        messageType: 'text',
+        content: response.response,
+        data: response.data,
+        queryType: response.type,
+        timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+      
+    } catch (error) {
+      console.error('Error procesando texto:', error);
+      Alert.alert('Error', 'No se pudo procesar tu consulta. Por favor, intenta de nuevo.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStartRecording = async () => {
+    try {
+      await startRecording();
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo iniciar la grabación. Verifica los permisos de micrófono.');
+    }
+  };
+
+  const handleStopRecording = async () => {
+    try {
+      const uri = await stopRecording();
+      if (!uri) return;
+      
+      // Crear mensaje de audio del usuario
+      const userMessage = {
+        id: Date.now().toString(),
+        type: 'user',
+        messageType: 'audio',
+        audioUri: uri,
+        timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, userMessage]);
+      
+      // Procesar audio
+      setIsLoading(true);
+      const audioFile = {
+        uri,
+        type: 'audio/wav',
+        name: 'recording.wav',
+      };
+      
+      const result = await api.transcribeAndQuery(audioFile);
+      
+      // Actualizar mensaje con transcripción
+      setMessages(prev => prev.map(msg => 
+        msg.id === userMessage.id 
+          ? { ...msg, transcription: result.originalText }
+          : msg
+      ));
+      
+      // Agregar respuesta del asistente
+      const assistantMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        messageType: 'text',
+        content: result.response,
+        data: result.data,
+        queryType: result.type,
+        timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+      
+    } catch (error) {
+      console.error('Error procesando audio:', error);
+      Alert.alert('Error', 'No se pudo procesar tu mensaje de voz. Por favor, intenta de nuevo.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMessagePress = (message) => {
+    if (message.type === 'user' && message.messageType === 'audio') {
+      playAudio(message);
+    } else if (message.type === 'assistant') {
+      playAudio(message);
+    }
+  };
+
+  const handleMessageLongPress = (message) => {
+    if (message.type === 'assistant' && message.data) {
+      Alert.alert(
+        'Opciones de exportación',
+        '¿Qué deseas hacer con estos datos?',
+        [
+          {
+            text: 'Exportar a Excel',
+            onPress: () => api.generateReport({
+              response: message.content,
+              data: message.data,
+              type: message.queryType
+            }, 'excel')
+          },
+          {
+            text: 'Exportar a PDF',
+            onPress: () => api.generateReport({
+              response: message.content,
+              data: message.data,
+              type: message.queryType
+            }, 'pdf')
+          },
+          {
+            text: 'Cancelar',
+            style: 'cancel'
+          }
+        ]
+      );
+    }
+  };
+
+  const clearChat = () => {
+    Alert.alert(
+      'Limpiar chat',
+      '¿Estás seguro de que quieres borrar toda la conversación?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Borrar', 
+          style: 'destructive',
+          onPress: () => {
+            setMessages([{
+              id: Date.now().toString(),
+              type: 'assistant',
+              messageType: 'text',
+              content: '¡Chat limpiado! ¿En qué puedo ayudarte?',
+              timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+              queryType: 'help'
+            }]);
+            stopCurrentAudio();
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MaterialCommunityIcons name="robot" size={28} color="#00FFEF" />
+          <Text style={styles.headerTitle}>Asistente de Ventas</Text>
+        </View>
+        <TouchableOpacity onPress={clearChat} style={styles.clearButton}>
+          <MaterialCommunityIcons name="broom" size={24} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
+      </View>
       
-      <Header onClearChat={clearChat} />
-      
-      {/* Selector de idioma */}
-     
-      <LanguageSelector 
-        sourceLanguage={sourceLanguage}
-        setSourceLanguage={setSourceLanguage}
-      />
-
-     
-      
-      {messages.length === 0 ? (
-        <EmptyState 
-        setSourceLanguage={setSourceLanguage}
-        onStartRecording={handleStartRecording}
-        />
-      ) : (
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
+      <KeyboardAvoidingView 
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+      >
+        {/* Mensajes */}
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {messages.map((message) => (
             <MessageBubble
-              message={item}
-              onPress={(message) => playAudio(message)}
-              onLongPress={handleLongPressMessage}
-              isPlaying={currentPlayingId === item.id && (isPlaying || isGPTSpeaking)}
-              isPaused={currentPlayingId === item.id && isPaused}
+              key={message.id}
+              message={message}
+              onPress={handleMessagePress}
+              onLongPress={handleMessageLongPress}
+              isPlaying={currentPlayingId === message.id && (isPlaying || isGPTSpeaking)}
+              isPaused={currentPlayingId === message.id && isPaused}
             />
-          )}
-          contentContainerStyle={styles.messagesList}
+          ))}
+        </ScrollView>
+        
+        {/* Indicador de carga */}
+        {isLoading && <LoadingIndicator />}
+        
+        {/* Input */}
+        <ChatInput
+          onSendText={handleSendText}
+          onStartRecording={handleStartRecording}
+          onStopRecording={handleStopRecording}
+          isRecording={recordingStatus === 'recording'}
+          recordingTime={recordingTime}
         />
-      )}
-
-      {isProcessing && <LoadingIndicator />}
-      
-      <ChatInput
-        onSendText={handleSendText}
-        onStartRecording={handleStartRecording}
-        onStopRecording={handleStopRecording}
-        isRecording={recordingStatus === 'recording'}
-        recordingTime={recordingTime}
-        placeholder={sourceLanguage === 'es' ? "Escribe en español..." : "Escreva em português..."}
-      />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
-
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#0D1117',
   },
-  messagesList: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(26, 31, 53, 0.9)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  recordContainer: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
+  headerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  recordingInfo: {
-    backgroundColor: COLORS.overlay,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginLeft: 12,
+  },
+  clearButton: {
     padding: 8,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
   },
-  recordingTime: {
-    color: COLORS.white,
-    marginRight: 8,
+  content: {
+    flex: 1,
   },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.recording,
+  messagesContainer: {
+    flex: 1,
   },
-  waveform: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
-    height: 20,
-  },
-  waveformBar: {
-    width: 3,
-    marginHorizontal: 1,
-    borderRadius: 1.5,
+  messagesContent: {
+    paddingVertical: 16,
   },
 });
+
+export default App;
