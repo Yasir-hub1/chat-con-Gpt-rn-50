@@ -1,437 +1,378 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Animated, 
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
   Text,
+  Animated,
+  Platform,
   Keyboard,
-  Dimensions
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../Constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
-const { width } = Dimensions.get('window');
-
- const ChatInput = ({ 
-  onSendText, 
-  onStartRecording, 
-  onStopRecording, 
+const ChatInput = ({
+  onSendText,
+  onStartRecording,
+  onStopRecording,
   isRecording,
-  recordingTime 
+  recordingTime,
 }) => {
-  const [message, setMessage] = useState('');
+  const [inputText, setInputText] = useState('');
+  const [inputHeight, setInputHeight] = useState(44);
   const [isFocused, setIsFocused] = useState(false);
-  
-  // Animaciones
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const waveAnim1 = useRef(new Animated.Value(0)).current;
-  const waveAnim2 = useRef(new Animated.Value(0)).current;
-  const waveAnim3 = useRef(new Animated.Value(0)).current;
-  const inputExpandAnim = useRef(new Animated.Value(0)).current;
+  const recordingAnim = useRef(new Animated.Value(0)).current;
+  const focusAnim = useRef(new Animated.Value(0)).current;
 
-  // Efecto para animación de grabación
-  useEffect(() => {
+  React.useEffect(() => {
     if (isRecording) {
-      // Animación de pulso para el botón
-      Animated.loop(
+      // Animación de pulso para grabación
+      const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.2,
-            duration: 1000,
+            duration: 800,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-      
-      // Animaciones para las ondas de sonido
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(waveAnim1, {
-            toValue: 1,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-          Animated.timing(waveAnim1, {
-            toValue: 0,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-      
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(waveAnim2, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-            delay: 100,
-          }),
-          Animated.timing(waveAnim2, {
-            toValue: 0,
             duration: 800,
             useNativeDriver: true,
           }),
         ])
-      ).start();
+      );
       
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(waveAnim3, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-            delay: 200,
-          }),
-          Animated.timing(waveAnim3, {
-            toValue: 0,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
+      // Animación de entrada del panel de grabación
+      Animated.timing(recordingAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+      
+      pulse.start();
+      
+      return () => {
+        pulse.stop();
+      };
     } else {
-      // Detener animaciones
-      pulseAnim.setValue(1);
-      waveAnim1.setValue(0);
-      waveAnim2.setValue(0);
-      waveAnim3.setValue(0);
+      Animated.timing(recordingAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     }
   }, [isRecording]);
-  
-  // Efecto para animación de input
-  useEffect(() => {
-    Animated.timing(inputExpandAnim, {
+
+  React.useEffect(() => {
+    Animated.timing(focusAnim, {
       toValue: isFocused ? 1 : 0,
       duration: 200,
-      useNativeDriver: false, // Importante: no usar native driver para height
+      useNativeDriver: false,
     }).start();
   }, [isFocused]);
 
-  const handleSendText = () => {
-    if (message.trim()) {
-      onSendText(message.trim());
-      setMessage('');
-    }
-  };
-
-  const handleRecordPress = () => {
-    if (isRecording) {
-      onStopRecording();
-    } else {
-      onStartRecording();
+  const handleSend = () => {
+    if (inputText.trim()) {
+      onSendText(inputText.trim());
+      setInputText('');
+      setInputHeight(44);
       Keyboard.dismiss();
     }
   };
 
-  const formatTime = (seconds) => {
+  const handleContentSizeChange = (event) => {
+    const newHeight = Math.min(Math.max(44, event.nativeEvent.contentSize.height + 20), 120);
+    setInputHeight(newHeight);
+  };
+
+  const formatRecordingTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-  
-  // Calcular la altura del input basado en animación
-  const inputHeight = inputExpandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [45, 80]
-  });
-  
-  // Fix para las barras del visualizador - usar transform en lugar de height
-  const visualizerBar1Height = waveAnim1.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 4]
-  });
-  const visualizerBar2Height = waveAnim2.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 3]
-  });
-  const visualizerBar3Height = waveAnim3.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 3.6]
-  });
+
+  const canSend = inputText.trim().length > 0;
+
+  if (isRecording) {
+    return (
+      <Animated.View 
+        style={[
+          styles.container,
+          {
+            transform: [{ translateY: recordingAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [100, 0],
+            })}],
+            opacity: recordingAnim,
+          }
+        ]}
+      >
+        <BlurView intensity={80} tint="dark" style={styles.recordingContainer}>
+          <LinearGradient
+            colors={['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.1)']}
+            style={styles.recordingGradient}
+          >
+            <View style={styles.recordingContent}>
+              <Animated.View 
+                style={[
+                  styles.recordingButton,
+                  { transform: [{ scale: pulseAnim }] }
+                ]}
+              >
+                <LinearGradient
+                  colors={['#EF4444', '#DC2626']}
+                  style={styles.recordingButtonGradient}
+                >
+                  <MaterialCommunityIcons name="microphone" size={24} color="#FFFFFF" />
+                </LinearGradient>
+              </Animated.View>
+              
+              <View style={styles.recordingInfo}>
+                <Text style={styles.recordingText}>Grabando...</Text>
+                <Text style={styles.recordingTime}>{formatRecordingTime(recordingTime)}</Text>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.stopButton}
+                onPress={onStopRecording}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="stop" size={24} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </BlurView>
+      </Animated.View>
+    );
+  }
 
   return (
-    <View style={styles.outerContainer}>
-      {/* Ondas decorativas en la parte superior */}
-      <View style={styles.wavesContainer}>
-        <View style={[styles.wave, { opacity: 0.03 }]} />
-        <View style={[styles.wave, styles.wave2, { opacity: 0.02 }]} />
-      </View>
-      
-      <View style={styles.container}>
-        {/* Indicador de grabación */}
-        {isRecording && (
-          <View style={styles.recordingContainer}>
-            <View style={styles.recordingVisualizer}>
-              <Animated.View 
-                style={[
-                  styles.visualizerBar, 
-                  { 
-                    transform: [{ scaleY: visualizerBar1Height }],
-                    opacity: waveAnim1
-                  }
-                ]} 
+    <View style={styles.container}>
+      <BlurView intensity={80} tint="dark" style={styles.inputContainer}>
+        <LinearGradient
+          colors={['rgba(26, 31, 53, 0.95)', 'rgba(15, 20, 25, 0.95)']}
+          style={styles.inputGradient}
+        >
+          <View style={styles.inputWrapper}>
+            <Animated.View 
+              style={[
+                styles.textInputContainer,
+                {
+                  height: inputHeight,
+                  borderColor: focusAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['rgba(255, 255, 255, 0.1)', '#6366F1'],
+                  }),
+                  shadowOpacity: focusAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 0.3],
+                  }),
+                }
+              ]}
+            >
+              <TextInput
+                style={[styles.textInput, { height: inputHeight - 4 }]}
+                placeholder="Escriba su consulta empresarial..."
+                placeholderTextColor="#9CA3AF"
+                value={inputText}
+                onChangeText={setInputText}
+                onContentSizeChange={handleContentSizeChange}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                multiline
+                textAlignVertical="top"
+                maxLength={500}
               />
-              <Animated.View 
-                style={[
-                  styles.visualizerBar, 
-                  { 
-                    transform: [{ scaleY: visualizerBar2Height }],
-                    opacity: waveAnim2
-                  }
-                ]} 
-              />
-              <Animated.View 
-                style={[
-                  styles.visualizerBar, 
-                  { 
-                    transform: [{ scaleY: visualizerBar3Height }],
-                    opacity: waveAnim3
-                  }
-                ]} 
-              />
-              <Animated.View 
-                style={[
-                  styles.visualizerBar, 
-                  { 
-                    transform: [{ scaleY: visualizerBar1Height }],
-                    opacity: waveAnim1
-                  }
-                ]} 
-              />
-              <Animated.View 
-                style={[
-                  styles.visualizerBar, 
-                  { 
-                    transform: [{ scaleY: visualizerBar2Height }],
-                    opacity: waveAnim2
-                  }
-                ]} 
-              />
-            </View>
+              
+              {inputText.length > 0 && (
+                <View style={styles.characterCount}>
+                  <Text style={styles.characterText}>{inputText.length}/500</Text>
+                </View>
+              )}
+            </Animated.View>
             
-            <View style={styles.recordingInfo}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingTime}>
-                {formatTime(recordingTime)}
-              </Text>
-            </View>
-            
-            <Text style={styles.recordingLabel}>
-              Grabando mensaje de voz...
-            </Text>
-          </View>
-        )}
-        
-        {/* Contenedor del input */}
-        <View style={styles.inputWrapper}>
-          <Animated.View style={[
-            styles.inputContainer,
-            isFocused && styles.inputContainerFocused,
-            { height: inputHeight }
-          ]}>
-            <MaterialCommunityIcons
-              name="text-box-outline"
-              size={20}
-              color="rgba(255,255,255,0.6)"
-              style={styles.inputIcon}
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Escribe un mensaje..."
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              maxLength={500}
-              editable={!isRecording}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-            />
-            
-            {message.trim() ? (
+            <View style={styles.actionsContainer}>
               <TouchableOpacity 
-                onPress={handleSendText}
-                style={styles.sendButton}
+                style={styles.actionButton}
+                onPress={onStartRecording}
                 activeOpacity={0.7}
               >
-                <MaterialCommunityIcons
-                  name="send"
-                  size={20}
-                  color="#00FFEF"
-                />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                onPress={handleRecordPress}
-                style={[
-                  styles.recordButton,
-                  isRecording && styles.recording
-                ]}
-                activeOpacity={0.7}
-              >
-                <Animated.View
-                  style={[
-                    styles.recordButtonInner,
-                    { transform: [{ scale: pulseAnim }] }
-                  ]}
+                <LinearGradient
+                  colors={['rgba(99, 102, 241, 0.2)', 'rgba(139, 92, 246, 0.2)']}
+                  style={styles.actionButtonGradient}
                 >
-                  <MaterialCommunityIcons
-                    name={isRecording ? "stop" : "microphone"}
-                    size={18}
-                    color={isRecording ? "#FF3B30" : "#00FFEF"}
-                  />
-                </Animated.View>
+                  <MaterialCommunityIcons name="microphone" size={20} color="#A1A1AA" />
+                </LinearGradient>
               </TouchableOpacity>
-            )}
-          </Animated.View>
-        </View>
-      </View>
+              
+              <TouchableOpacity 
+                style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+                onPress={handleSend}
+                disabled={!canSend}
+                activeOpacity={canSend ? 0.8 : 1}
+              >
+                <LinearGradient
+                  colors={canSend ? ['#6366F1', '#8B5CF6'] : ['#374151', '#4B5563']}
+                  style={styles.sendButtonGradient}
+                >
+                  <Ionicons 
+                    name="send" 
+                    size={18} 
+                    color={canSend ? "#FFFFFF" : "#6B7280"} 
+                  />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+      </BlurView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  outerContainer: {
-    position: 'relative',
-    backgroundColor: 'transparent', // Color de fondo oscuro
-  },
   container: {
-    padding: 12,
-    paddingBottom: 16,
-  },
-  wavesContainer: {
     position: 'absolute',
-    top: -20,
+    bottom: 0,
     left: 0,
     right: 0,
-    height: 20,
+  },
+  inputContainer: {
     overflow: 'hidden',
-    transform: [{ rotate: '180deg' }]
   },
-  wave: {
-    position: 'absolute',
-    bottom: -40,
-    left: 0,
-    right: 0,
-    height: 50,
-    backgroundColor: '#00FFEF',
-    borderTopLeftRadius: 1000,
-    borderTopRightRadius: 1000,
-  },
-  wave2: {
-    bottom: -50,
-    left: -20,
-    right: -20,
-  },
-  recordingContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  recordingVisualizer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 30,
-    marginBottom: 8,
-    justifyContent: 'center',
-  },
-  visualizerBar: {
-    width: 3,
-    height: 20,
-    backgroundColor: '#00FFEF',
-    borderRadius: 3,
-    marginHorizontal: 2,
-    transformOrigin: 'bottom',
-  },
-  recordingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF3B30',
-    marginRight: 8,
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-  },
-  recordingTime: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  recordingLabel: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 12,
-    marginTop: 4,
+  inputGradient: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
   },
   inputWrapper: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    gap: 12,
   },
-  inputContainer: {
+  textInputContainer: {
     flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 2,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
+    position: 'relative',
+  },
+  textInput: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    lineHeight: 20,
+    paddingTop: Platform.OS === 'ios' ? 12 : 10,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 10,
+    includeFontPadding: false,
+  },
+  characterCount: {
+    position: 'absolute',
+    bottom: 4,
+    right: 8,
+  },
+  characterText: {
+    fontSize: 10,
+    color: '#6B7280',
+  },
+  actionsContainer: {
     flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  actionButtonGradient: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    borderRadius: 24,
-    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  inputContainerFocused: {
-    borderColor: 'rgba(0, 255, 239, 0.3)',
-    backgroundColor: 'rgba(0, 255, 239, 0.06)',
-  },
-  inputIcon: {
-    paddingRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 8,
-    color: 'rgba(255, 255, 255, 0.9)',
-    maxHeight: 80,
-  },
   sendButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 255, 239, 0.1)',
-    width: 36,
-    height: 36,
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  sendButtonDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  sendButtonGradient: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  recordButton: {
-    padding: 8,
+  recordingContainer: {
+    overflow: 'hidden',
   },
-  recordButtonInner: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 255, 239, 0.1)',
+  recordingGradient: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+  },
+  recordingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  recordingButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  recordingButtonGradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 239, 0.3)',
   },
-  recording: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+  recordingInfo: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  recordingText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  recordingTime: {
+    fontSize: 14,
+    color: '#EF4444',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  stopButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#EF4444',
   },
 });
 

@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+import { Alert } from 'react-native';
 
 const API_KEY = "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";
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';

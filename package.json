@@ -29,7 +29,11 @@
     "expo-task-manager": "~11.7.3",
     "react": "18.2.0",
     "react-native": "0.73.6",
-    "react-native-vector-icons": "^10.1.0"
+    "react-native-vector-icons": "^10.1.0",
+    "expo-linear-gradient": "~12.7.2",
+    "expo-blur": "~12.9.2",
+    "react-native-webview": "13.6.4",
+    "expo-media-library": "~15.9.2"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

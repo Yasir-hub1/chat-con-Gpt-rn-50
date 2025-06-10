@@ -1,166 +1,150 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, Animated, StyleSheet, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Dimensions,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../Constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
 const { width } = Dimensions.get('window');
 
-export const LoadingIndicator = ({ loadingText = 'Consultando ventas' }) => {
-  // Animaciones para los puntos
-  const dots = useRef([
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-  ]).current;
-
-  // Animación de pulso para el ícono
+const LoadingIndicator = () => {
+  const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  
-  // Animación para el resplandor
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  
-  // Animación para la aparición del indicador
-  const fadeInAnim = useRef(new Animated.Value(0)).current;
-  const slideUpAnim = useRef(new Animated.Value(20)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Animación de aparición
-    Animated.parallel([
-      Animated.timing(fadeInAnim, {
+    // Animación de rotación
+    const rotation = Animated.loop(
+      Animated.timing(rotateAnim, {
         toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
+        duration: 2000,
+        useNativeDriver: false,
       })
-    ]).start();
-    
-    // Animación de pulso para el ícono
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-    
-    // Animación del resplandor
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0.2,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Animaciones para los puntos
-    const animations = dots.map((dot, index) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(index * 120),
-          Animated.timing(dot, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(dot, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-        ])
-      )
     );
 
-    Animated.parallel(animations).start();
+    // Animación de pulso
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Animación de entrada
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    rotation.start();
+    pulse.start();
 
     return () => {
-      animations.forEach(anim => anim.stop());
+      rotation.stop();
+      pulse.stop();
     };
   }, []);
+
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
     <Animated.View 
       style={[
         styles.container,
         {
-          opacity: fadeInAnim,
-          transform: [{ translateY: slideUpAnim }]
+          opacity: fadeAnim,
+          transform: [{ scale: pulseAnim }],
         }
       ]}
     >
-      <View style={styles.content}>
-        {/* Decoración del borde con resplandor */}
-        <Animated.View 
-          style={[
-            styles.glowBorder,
-            {
-              opacity: glowAnim.interpolate({
-                inputRange: [0.2, 1],
-                outputRange: [0.3, 0.7]
-              })
-            }
-          ]}
-        />
-        
-        {/* Icono animado */}
-        <Animated.View style={{
-          transform: [{ scale: pulseAnim }]
-        }}>
-          <View style={styles.iconContainer}>
-            <MaterialCommunityIcons 
-              name="chart-line" 
-              size={22} 
-              color="#00FFEF" 
-            />
-          </View>
-        </Animated.View>
-        
-        {/* Texto de carga */}
-        <View style={styles.textContainer}>
-          <Text style={styles.text}>{loadingText}</Text>
-          <View style={styles.dotsContainer}>
-            {dots.map((dot, index) => (
+      <View style={styles.loadingCard}>
+        <BlurView intensity={60} tint="light" style={styles.blurContainer}>
+          <LinearGradient
+            colors={['rgba(255, 255, 255, 0.9)', 'rgba(255, 255, 255, 0.8)']}
+            style={styles.cardGradient}
+          >
+            <View style={styles.iconContainer}>
               <Animated.View
-                key={index}
                 style={[
-                  styles.dot,
-                  {
-                    opacity: dot.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.5, 1]
-                    }),
-                    transform: [
-                      {
-                        scale: dot.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.8, 1.2],
-                        }),
-                      },
-                    ],
-                  },
+                  styles.iconWrapper,
+                  { transform: [{ rotate: spin }] }
                 ]}
-              />
-            ))}
-          </View>
-        </View>
+              >
+                <LinearGradient
+                  colors={['#6366F1', '#8B5CF6']}
+                  style={styles.iconGradient}
+                >
+                  <MaterialCommunityIcons name="brain" size={24} color="#FFFFFF" />
+                </LinearGradient>
+              </Animated.View>
+            </View>
+            
+            <View style={styles.textContainer}>
+              <Text style={styles.primaryText}>Procesando consulta</Text>
+              <Text style={styles.secondaryText}>Analizando datos empresariales...</Text>
+            </View>
+            
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <Animated.View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: rotateAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['20%', '90%'],
+                      })
+                    }
+                  ]}
+                />
+              </View>
+            </View>
+            
+            <View style={styles.dotsContainer}>
+              {[0, 1, 2].map((index) => (
+                <Animated.View
+                  key={index}
+                  style={[
+                    styles.dot,
+                    {
+                      opacity: rotateAnim.interpolate({
+                        inputRange: [0, 0.3, 0.6, 1],
+                        outputRange: index === 0 ? [1, 0.3, 0.3, 1] :
+                                   index === 1 ? [0.3, 1, 0.3, 0.3] :
+                                                 [0.3, 0.3, 1, 0.3],
+                      }),
+                      transform: [{
+                        scale: rotateAnim.interpolate({
+                          inputRange: [0, 0.3, 0.6, 1],
+                          outputRange: index === 0 ? [1, 0.7, 0.7, 1] :
+                                     index === 1 ? [0.7, 1, 0.7, 0.7] :
+                                                   [0.7, 0.7, 1, 0.7],
+                        })
+                      }]
+                    }
+                  ]}
+                />
+              ))}
+            </View>
+          </LinearGradient>
+        </BlurView>
       </View>
     </Animated.View>
   );
@@ -169,73 +153,87 @@ export const LoadingIndicator = ({ loadingText = 'Consultando ventas' }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 80,
-    left: width / 2 - 110,
-    width: 220,
-    alignItems: 'center',
+    bottom: 100,
+    left: 16,
+    right: 16,
     zIndex: 1000,
   },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(26, 31, 53, 0.95)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 24,
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 239, 0.3)',
+  loadingCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
   },
-  glowBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#00FFEF',
-    shadowColor: '#00FFEF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 6,
+  blurContainer: {
+    overflow: 'hidden',
+  },
+  cardGradient: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 255, 239, 0.15)',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  iconWrapper: {
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  iconGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
   },
   textContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 16,
   },
-  text: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.9)',
+  primaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  secondaryText: {
+    fontSize: 13,
+    color: '#6B7280',
     fontWeight: '500',
+  },
+  progressContainer: {
+    marginBottom: 12,
+  },
+  progressBar: {
+    height: 3,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#6366F1',
+    borderRadius: 2,
   },
   dotsContainer: {
     flexDirection: 'row',
-    marginLeft: 4,
-    width: 30,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 6,
   },
   dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#00FFEF',
-    shadowColor: '#00FFEF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#6366F1',
   },
 });
 

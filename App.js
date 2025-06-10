@@ -9,26 +9,85 @@ import {
   Platform,
   TouchableOpacity,
   Alert,
+  StatusBar,
+  Dimensions,
+  BackHandler,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useAudioRecorder } from './src/hooks/useAudioRecorder';
 import { useAudioPlayer } from './src/hooks/useAudioPlayer';
 import { api } from './src/services/api';
 import MessageBubble from './src/components/MessageBubble';
 import ChatInput from './src/components/ChatInput';
 import LoadingIndicator from './src/components/LoadingIndicator';
+import DocumentViewer from './src/components/DocumentViewer';
+import QuickActions from './src/components/DocumentViewer';
+import Header from './src/components/Header';
+import TermsModal from './src/components/Terminos';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const { width } = Dimensions.get('window');
 
 const App = () => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [documentToView, setDocumentToView] = useState(null);
+  const [showQuickActions, setShowQuickActions] = useState(true);
   const scrollViewRef = useRef();
-  
+  const [showTermsModal, setShowTermsModal] = useState(true);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const { recording, recordingStatus, startRecording, stopRecording } = useAudioRecorder();
   const { playAudio, isPlaying, isGPTSpeaking, currentPlayingId, stopCurrentAudio, isPaused } = useAudioPlayer();
   
   const recordingTimerRef = useRef(null);
+
+
+    // Verificar si los términos han sido aceptados al iniciar la app
+    useEffect(() => {
+      checkTermsAcceptance();
+    }, []);
+  
+    const checkTermsAcceptance = async () => {
+      try {
+        const accepted = await AsyncStorage.getItem('termsAccepted');
+        if (accepted !== 'true') {
+          setShowTermsModal(true);
+        } else {
+          setTermsAccepted(true);
+        }
+      } catch (error) {
+        console.error('Error checking terms:', error);
+        setShowTermsModal(true);
+      }
+    };
+  
+    const handleAcceptTerms = async () => {
+      try {
+        await AsyncStorage.setItem('termsAccepted', 'true');
+        setTermsAccepted(true);
+        setShowTermsModal(false);
+      } catch (error) {
+        console.error('Error saving terms acceptance:', error);
+      }
+    };
+  
+    const handleDeclineTerms = () => {
+      // Puedes manejar el rechazo como prefieras
+      Alert.alert(
+        'Términos Requeridos',
+        'Para usar Sales Intelligence debe aceptar los términos y condiciones.',
+        [
+          { text: 'Revisar nuevamente', onPress: () => {} },
+          { text: 'Salir de la app', onPress: () => BackHandler.exitApp() }
+        ]
+      );
+    };
+  
+    
+  
 
   // Mensaje de bienvenida
   useEffect(() => {
@@ -36,7 +95,7 @@ const App = () => {
       id: Date.now().toString(),
       type: 'assistant',
       messageType: 'text',
-      content: '¡Hola! Soy tu asistente de ventas. Puedo ayudarte con información sobre:\n\n• Mejores ventas del día/mes/año\n• Vendedor destacado\n• Productos más vendidos\n• Rendimiento por sucursal\n• Resumen y tendencias de ventas\n• Comparaciones entre períodos\n\n¿En qué puedo ayudarte hoy?',
+      content: 'Bienvenido al Centro de Análisis de Ventas. Soy su asistente inteligente especializado en generar insights empresariales.\n\nPuedo ayudarle con:\n\n• Análisis de rendimiento de ventas\n• Reportes de vendedores destacados\n• Métricas de productos más vendidos\n• Comparativas por sucursales\n• Tendencias y pronósticos\n• Exportación de datos\n\n¿Cómo puedo asistirle hoy?',
       timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
       queryType: 'help'
     };
@@ -73,7 +132,8 @@ const App = () => {
 
   const handleSendText = async (text) => {
     try {
-      // Agregar mensaje del usuario
+      setShowQuickActions(false);
+      
       const userMessage = {
         id: Date.now().toString(),
         type: 'user',
@@ -83,11 +143,9 @@ const App = () => {
       };
       setMessages(prev => [...prev, userMessage]);
       
-      // Procesar consulta
       setIsLoading(true);
       const response = await api.processAssistantQuery(text, 'text');
       
-      // Agregar respuesta del asistente
       const assistantMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
@@ -101,7 +159,7 @@ const App = () => {
       
     } catch (error) {
       console.error('Error procesando texto:', error);
-      Alert.alert('Error', 'No se pudo procesar tu consulta. Por favor, intenta de nuevo.');
+      Alert.alert('Error del Sistema', 'No se pudo procesar su consulta. Por favor, intente nuevamente.');
     } finally {
       setIsLoading(false);
     }
@@ -109,9 +167,10 @@ const App = () => {
 
   const handleStartRecording = async () => {
     try {
+      setShowQuickActions(false);
       await startRecording();
     } catch (error) {
-      Alert.alert('Error', 'No se pudo iniciar la grabación. Verifica los permisos de micrófono.');
+      Alert.alert('Error de Permisos', 'No se pudo acceder al micrófono. Verifique los permisos de la aplicación.');
     }
   };
 
@@ -120,7 +179,6 @@ const App = () => {
       const uri = await stopRecording();
       if (!uri) return;
       
-      // Crear mensaje de audio del usuario
       const userMessage = {
         id: Date.now().toString(),
         type: 'user',
@@ -130,7 +188,6 @@ const App = () => {
       };
       setMessages(prev => [...prev, userMessage]);
       
-      // Procesar audio
       setIsLoading(true);
       const audioFile = {
         uri,
@@ -140,14 +197,12 @@ const App = () => {
       
       const result = await api.transcribeAndQuery(audioFile);
       
-      // Actualizar mensaje con transcripción
       setMessages(prev => prev.map(msg => 
         msg.id === userMessage.id 
           ? { ...msg, transcription: result.originalText }
           : msg
       ));
       
-      // Agregar respuesta del asistente
       const assistantMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
@@ -161,7 +216,7 @@ const App = () => {
       
     } catch (error) {
       console.error('Error procesando audio:', error);
-      Alert.alert('Error', 'No se pudo procesar tu mensaje de voz. Por favor, intenta de nuevo.');
+      Alert.alert('Error de Procesamiento', 'No se pudo procesar el mensaje de voz. Intente nuevamente.');
     } finally {
       setIsLoading(false);
     }
@@ -175,27 +230,37 @@ const App = () => {
     }
   };
 
+  const handleExportDocument = async (message, format) => {
+    try {
+      const document = await api.generateReport({
+        response: message.content,
+        data: message.data,
+        type: message.queryType
+      }, format);
+      
+      setDocumentToView(document);
+    } catch (error) {
+      Alert.alert('Error de Exportación', 'No se pudo generar el documento. Intente nuevamente.');
+    }
+  };
+
   const handleMessageLongPress = (message) => {
     if (message.type === 'assistant' && message.data) {
       Alert.alert(
-        'Opciones de exportación',
-        '¿Qué deseas hacer con estos datos?',
+        'Opciones de Documento',
+        'Seleccione el formato para exportar',
         [
           {
-            text: 'Exportar a Excel',
-            onPress: () => api.generateReport({
-              response: message.content,
-              data: message.data,
-              type: message.queryType
-            }, 'excel')
+            text: 'Excel (.xlsx)',
+            onPress: () => handleExportDocument(message, 'excel')
           },
           {
-            text: 'Exportar a PDF',
-            onPress: () => api.generateReport({
-              response: message.content,
-              data: message.data,
-              type: message.queryType
-            }, 'pdf')
+            text: 'PDF (.pdf)',
+            onPress: () => handleExportDocument(message, 'pdf')
+          },
+          {
+            text: 'Compartir Datos',
+            onPress: () => api.shareData(message.data)
           },
           {
             text: 'Cancelar',
@@ -206,24 +271,30 @@ const App = () => {
     }
   };
 
+  const handleQuickAction = (action) => {
+    setShowQuickActions(false);
+    handleSendText(action.query);
+  };
+
   const clearChat = () => {
     Alert.alert(
-      'Limpiar chat',
-      '¿Estás seguro de que quieres borrar toda la conversación?',
+      'Limpiar Sesión',
+      '¿Desea reiniciar la conversación? Esta acción no se puede deshacer.',
       [
         { text: 'Cancelar', style: 'cancel' },
         { 
-          text: 'Borrar', 
+          text: 'Reiniciar', 
           style: 'destructive',
           onPress: () => {
             setMessages([{
               id: Date.now().toString(),
               type: 'assistant',
               messageType: 'text',
-              content: '¡Chat limpiado! ¿En qué puedo ayudarte?',
+              content: 'Sesión reiniciada. ¿En qué puedo asistirle?',
               timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
               queryType: 'help'
             }]);
+            setShowQuickActions(true);
             stopCurrentAudio();
           }
         }
@@ -232,85 +303,87 @@ const App = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <MaterialCommunityIcons name="robot" size={28} color="#00FFEF" />
-          <Text style={styles.headerTitle}>Asistente de Ventas</Text>
-        </View>
-        <TouchableOpacity onPress={clearChat} style={styles.clearButton}>
-          <MaterialCommunityIcons name="broom" size={24} color="rgba(255,255,255,0.7)" />
-        </TouchableOpacity>
-      </View>
-      
-      <KeyboardAvoidingView 
-        style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-      >
-        {/* Mensajes */}
-        <ScrollView 
-          ref={scrollViewRef}
-          style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
-          showsVerticalScrollIndicator={false}
+    <>
+    {!termsAccepted ? (
+      <TermsModal
+        visible={showTermsModal}
+        onAccept={handleAcceptTerms}
+        onDecline={handleDeclineTerms}
+      />
+    ) : (
+      <>
+      <StatusBar barStyle="light-content" backgroundColor="#1a1f35" />
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#1a1f35', '#0f1419']}
+          style={styles.backgroundGradient}
         >
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onPress={handleMessagePress}
-              onLongPress={handleMessageLongPress}
-              isPlaying={currentPlayingId === message.id && (isPlaying || isGPTSpeaking)}
-              isPaused={currentPlayingId === message.id && isPaused}
+          <Header onClearChat={clearChat} />
+          
+          <KeyboardAvoidingView 
+            style={styles.content}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          >
+            <ScrollView 
+              ref={scrollViewRef}
+              style={styles.messagesContainer}
+              contentContainerStyle={styles.messagesContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {messages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  onPress={handleMessagePress}
+                  onLongPress={handleMessageLongPress}
+                  isPlaying={currentPlayingId === message.id && (isPlaying || isGPTSpeaking)}
+                  isPaused={currentPlayingId === message.id && isPaused}
+                />
+              ))}
+              
+              {showQuickActions && messages.length <= 1 && (
+                <QuickActions onActionPress={handleQuickAction} />
+              )}
+            </ScrollView>
+            
+            {isLoading && <LoadingIndicator />}
+            
+            <ChatInput
+              onSendText={handleSendText}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+              isRecording={recordingStatus === 'recording'}
+              recordingTime={recordingTime}
             />
-          ))}
-        </ScrollView>
+          </KeyboardAvoidingView>
+        </LinearGradient>
         
-        {/* Indicador de carga */}
-        {isLoading && <LoadingIndicator />}
-        
-        {/* Input */}
-        <ChatInput
-          onSendText={handleSendText}
-          onStartRecording={handleStartRecording}
-          onStopRecording={handleStopRecording}
-          isRecording={recordingStatus === 'recording'}
-          recordingTime={recordingTime}
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-};
+        {documentToView && (
+          <DocumentViewer
+            document={documentToView}
+            onClose={() => setDocumentToView(null)}
+          />
+        )}
 
+        <TermsModal
+          visible={showTermsModal}
+          onAccept={handleAcceptTerms}
+          onDecline={handleDeclineTerms}
+        />
+      </SafeAreaView>
+      </>
+    )}
+  </>
+);
+}
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D1117',
+    backgroundColor: '#1a1f35',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(26, 31, 53, 0.9)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginLeft: 12,
-  },
-  clearButton: {
-    padding: 8,
+  backgroundGradient: {
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -319,7 +392,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    paddingVertical: 16,
+    paddingVertical: 20,
+    paddingBottom: 100,
   },
 });
 
