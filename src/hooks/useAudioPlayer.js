@@ -21,8 +21,6 @@ export const useAudioPlayer = () => {
     };
   }, [sound]);
 
-  
-
   const stopCurrentAudio = async () => {
     try {
       if (sound) {
@@ -86,7 +84,7 @@ export const useAudioPlayer = () => {
     }
   };
 
-  const playGPTResponse = async (text, messageId) => {
+  const playGPTResponse = async (text, messageId, message = null) => {
     try {
       // Si es el mismo mensaje GPT, maneja la pausa
       if (currentPlayingId === messageId) {
@@ -96,8 +94,11 @@ export const useAudioPlayer = () => {
           setIsPaused(true);
           setLastPlayedText(text);
         } else if (isPaused) {
+          // Determinar el idioma para la reproducción
+          const language = getLanguageForSpeech(message);
+          
           Speech.speak(lastPlayedText, {
-            language: 'es-ES',
+            language: language,
             onDone: () => {
               setIsGPTSpeaking(false);
               setCurrentPlayingId(null);
@@ -113,6 +114,9 @@ export const useAudioPlayer = () => {
       // Si hay otro audio reproduciéndose, detenlo
       await stopCurrentAudio();
 
+      // Determinar el idioma para la reproducción
+      const language = getLanguageForSpeech(message);
+
       // Inicia la nueva reproducción
       setLastPlayedText(text);
       setIsGPTSpeaking(true);
@@ -120,7 +124,7 @@ export const useAudioPlayer = () => {
       setIsPaused(false);
 
       Speech.speak(text, {
-        language: 'es-ES',
+        language: language,
         onDone: () => {
           setIsGPTSpeaking(false);
           setCurrentPlayingId(null);
@@ -138,11 +142,23 @@ export const useAudioPlayer = () => {
     }
   };
 
+  // Función para determinar el idioma de la síntesis de voz
+  const getLanguageForSpeech = (message) => {
+    // Si es una traducción, usar el idioma de destino
+    if (message && message.messageType === 'translation' && message.targetLang) {
+      return message.targetLang === 'pt' ? 'pt-BR' : 'es-ES';
+    }
+    
+    // Por defecto, usar español
+    return 'es-ES';
+  };
+
   const playAudio = async (message) => {
     if (message.type === 'user') {
       await playUserAudio(message.audioUri, message.id);
     } else {
-      await playGPTResponse(message.audioUri, message.id);
+      // Pasar el mensaje completo para determinar el idioma
+      await playGPTResponse(message.audioUri || message.content, message.id, message);
     }
   };
 
